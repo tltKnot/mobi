@@ -1,6 +1,6 @@
 ---
 - name: Update nginx configuration parameters
-  hosts: all
+  hosts: test
   become: yes
   vars:
     worker_connections: 1234
