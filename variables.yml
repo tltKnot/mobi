@@ -1,0 +1,49 @@
+---
+- name: Update nginx configuration parameters
+  hosts: all
+  become: yes
+  vars:
+    worker_connections: 1234
+    client_max_body_size: "123M"
+    nginx_conf_path: /etc/nginx/nginx.conf
+
+  tasks:
+    - name: Validate nginx.conf exists
+      stat:
+        path: "{{ nginx_conf_path }}"
+      register: nginx_conf
+      failed_when: not nginx_conf.stat.exists
+
+    - name: Create backup of nginx.conf
+      copy:
+        src: "{{ nginx_conf_path }}"
+        dest: "{{ nginx_conf_path }}.bak_{{ ansible_date_time.epoch }}"
+        remote_src: yes
+      when: nginx_conf.stat.exists
+
+    - name: Update worker_connections
+      replace:
+        path: "{{ nginx_conf_path }}"
+        regexp: 'worker_connections\s+\d+;'
+        replace: 'worker_connections {{ worker_connections }};'
+        backup: no
+      register: worker_conn_change
+
+    - name: Update client_max_body_size
+      replace:
+        path: "{{ nginx_conf_path }}"
+        regexp: 'client_max_body_size\s+\d+[kKmMgG]?;'
+        replace: 'client_max_body_size {{ client_max_body_size }};'
+        backup: no
+      register: client_max_size_change
+
+    - name: Restart nginx if changes were made
+      service:
+        name: nginx
+        state: restarted
+      when: worker_conn_change.changed or client_max_size_change.changed
+
+    - name: Show final configuration status
+      debug:
+        msg: "Configuration updated successfully. worker_connections={{ worker_connections }}, client_max_body_size={{ client_max_body_size }}"
+      when: worker_conn_change.changed or client_max_size_change.changed
